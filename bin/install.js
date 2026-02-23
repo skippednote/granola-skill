@@ -13,13 +13,17 @@ if (major < 18) {
   process.exit(1);
 }
 
-// ── Copy auth.js to a stable location ────────────────────────────────────────
+// ── Copy scripts to a stable location ────────────────────────────────────────
 const skillDir = join(homedir(), '.claude', 'skills', 'granola-auth');
 mkdirSync(skillDir, { recursive: true });
 
 const authJsSrc = join(__dirname, '..', 'auth.js');
 const authJsDest = join(skillDir, 'auth.js');
 copyFileSync(authJsSrc, authJsDest);
+
+const refreshJsSrc = join(__dirname, '..', 'refresh.js');
+const refreshJsDest = join(skillDir, 'refresh.js');
+copyFileSync(refreshJsSrc, refreshJsDest);
 
 // ── Write SKILL.md referencing the stable path ────────────────────────────────
 writeFileSync(join(skillDir, 'SKILL.md'), `\
@@ -29,9 +33,23 @@ description: Authenticate with Granola and save OAuth tokens to .env
 allowed-tools: Bash
 ---
 
-Run the Granola OAuth authentication flow to obtain API tokens.
+Authenticate with Granola. Try to silently refresh the existing token first;
+only open the browser for a full OAuth flow if refresh fails or no token exists.
 
-Execute this command using the Bash tool:
+## Step 1 — Try refresh first
+
+Run:
+
+\`\`\`
+node ${refreshJsDest}
+\`\`\`
+
+- If it exits 0: tokens are valid (or were refreshed). Report the new expiry and stop.
+- If it exits non-zero: proceed to Step 2.
+
+## Step 2 — Full OAuth flow (browser)
+
+Run:
 
 \`\`\`
 node ${authJsDest}
@@ -46,9 +64,11 @@ This will:
 6. Save all tokens to a \`.env\` file in the current working directory
 7. Prompt to configure MCP for Claude Code, Cursor, or both
 
-After running, display the contents of \`.env\` (mask token values to show only first + last 6 chars), confirm the path where it was written, and report which MCP config files were updated.
+After either step succeeds, display the contents of \`.env\` (mask token values
+to show only first + last 6 chars), confirm the path where it was written, and
+report which MCP config files were updated.
 
-If the command fails, show the full error output and suggest:
+If Step 2 fails, show the full error output and suggest:
 - Checking that port 3334 is not in use (\`lsof -i :3334\`)
 - Ensuring Node.js 18+ is installed (\`node --version\`)
 - Verifying internet connectivity to mcp.granola.ai
@@ -57,5 +77,6 @@ If the command fails, show the full error output and suggest:
 console.log('');
 console.log(`Skill installed at: ${skillDir}/SKILL.md`);
 console.log(`auth.js copied to:  ${authJsDest}`);
+console.log(`refresh.js copied to: ${refreshJsDest}`);
 console.log('');
 console.log('Restart Claude Code, then use /granola-auth to authenticate.');

@@ -224,7 +224,7 @@ function startCallbackServer() {
 
     server.listen(CALLBACK_PORT, () => {
       console.log(`\nCallback server listening on http://localhost:${CALLBACK_PORT}`);
-      resolveServer(callbackPromise);
+      resolveServer({ callbackPromise });
     });
 
     server.on('error', (err) => {
@@ -425,7 +425,7 @@ async function main() {
     const clientId = await registerClient(endpoints.registration_endpoint);
 
     // Step 3: Start local server
-    const callbackPromise = await startCallbackServer();
+    const { callbackPromise } = await startCallbackServer();
 
     // Step 4: PKCE + open browser
     const codeVerifier = generateCodeVerifier();
