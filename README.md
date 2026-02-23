@@ -15,16 +15,22 @@ A [Claude Code](https://claude.ai/code) skill that authenticates with [Granola](
 ## Installation
 
 ```bash
-git clone https://github.com/skippednote/granola-skill.git
-cd granola-skill
-bash install.sh
+npx github:skippednote/granola-skill
 ```
 
-The install script will:
+This will:
 1. Verify Node.js 18+ is available
-2. Write a `SKILL.md` to `~/.claude/skills/granola-auth/` with the correct absolute path to `auth.js`
+2. Copy `auth.js` to `~/.claude/skills/granola-auth/`
+3. Write a `SKILL.md` referencing that stable path
 
 After installation, **restart Claude Code** to pick up the new skill.
+
+> **Alternatively**, if you prefer to clone the repo manually:
+> ```bash
+> git clone https://github.com/skippednote/granola-skill.git
+> cd granola-skill
+> bash install.sh
+> ```
 
 ## Usage
 
@@ -60,33 +66,31 @@ After a successful run, your `.env` will contain:
 
 ## Using with MCP
 
-### Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`)
+The auth flow will prompt you to configure MCP automatically at the end. Choose from:
 
-```json
-{
-  "mcpServers": {
-    "granola": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-fetch", "https://mcp.granola.ai/mcp"],
-      "env": {
-        "AUTHORIZATION": "Bearer YOUR_GRANOLA_ACCESS_TOKEN"
-      }
-    }
-  }
-}
+- **Claude Code** — configured via `claude mcp add --transport http` (global config)
+- **Cursor** — configured in `~/.cursor/mcp.json`
+- **Both** or **Skip**
+
+### Manual configuration
+
+If you prefer to configure manually, use the `GRANOLA_ACCESS_TOKEN` from `.env`:
+
+#### Claude Code
+
+```bash
+claude mcp add --transport http granola https://mcp.granola.ai/mcp \
+  --header "Authorization: Bearer YOUR_GRANOLA_ACCESS_TOKEN"
 ```
 
-### Claude Code (`.claude/settings.json` or `--mcp-server` flag)
+#### Cursor (`~/.cursor/mcp.json`)
 
 ```json
 {
   "mcpServers": {
     "granola": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-fetch", "https://mcp.granola.ai/mcp"],
-      "env": {
-        "AUTHORIZATION": "Bearer YOUR_GRANOLA_ACCESS_TOKEN"
-      }
+      "url": "https://mcp.granola.ai/mcp",
+      "headers": { "Authorization": "Bearer YOUR_GRANOLA_ACCESS_TOKEN" }
     }
   }
 }
@@ -119,6 +123,8 @@ The script preserves any non-`GRANOLA_*` variables already in your `.env`.
 5. **Token exchange** — POSTs the code + verifier to the token endpoint to obtain `access_token` (and optionally `refresh_token`).
 
 6. **Saves to `.env`** — Writes all token variables to `.env` in the current working directory, preserving any existing non-Granola variables.
+
+7. **MCP configuration** — Prompts to configure Claude Code (`claude mcp add`) and/or Cursor (`~/.cursor/mcp.json`) with the new access token.
 
 ## License
 

@@ -23,8 +23,9 @@ This will:
 4. Capture the OAuth callback on localhost:3334
 5. Exchange the authorization code for access + refresh tokens
 6. Save all tokens to a `.env` file in the current working directory
+7. Prompt the user to configure MCP for Claude Code, Cursor, or Both
 
-After running, display the contents of `.env` (mask token values to show only first + last 6 chars) and confirm the path where it was written.
+After running, display the contents of `.env` (mask token values to show only first + last 6 chars), confirm the path where it was written, and report which MCP config files were updated.
 
 If the command fails, show the full error output and suggest:
 - Checking that port 3334 is not in use (`lsof -i :3334`)

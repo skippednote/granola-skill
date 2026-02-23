@@ -5,7 +5,8 @@
  * No external dependencies — uses Node.js built-ins only
  */
 
-import { createServer } from 'http';
+import http, { createServer } from 'http';
+import https from 'https';
 import { createHash, randomBytes } from 'crypto';
 import { exec } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -40,8 +41,6 @@ function generateState() {
 }
 
 async function fetchJson(url, options = {}) {
-  const { default: https } = await import('https');
-  const { default: http } = await import('http');
   const client = url.startsWith('https') ? https : http;
 
   return new Promise((resolve, reject) => {
@@ -180,7 +179,7 @@ async function registerClient(registrationEndpoint) {
 // ─── Step 3: Local callback server ───────────────────────────────────────────
 
 function startCallbackServer() {
-  return new Promise((resolveServer) => {
+  return new Promise((resolveServer, rejectServer) => {
     let callbackResolve;
     const callbackPromise = new Promise((resolve) => {
       callbackResolve = resolve;
@@ -199,8 +198,9 @@ function startCallbackServer() {
       const error = url.searchParams.get('error');
 
       if (error) {
+        const safeError = error.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         res.writeHead(400, { 'Content-Type': 'text/html' });
-        res.end(`<html><body><h2>Authentication failed</h2><p>${error}</p><script>window.close()</script></body></html>`);
+        res.end(`<html><body><h2>Authentication failed</h2><p>${safeError}</p><script>window.close()</script></body></html>`);
         callbackResolve({ error });
         return;
       }
@@ -219,21 +219,20 @@ function startCallbackServer() {
       `);
 
       callbackResolve({ code, state });
-
-      // Close server after response is sent
-      setTimeout(() => server.close(), 500);
+      res.on('finish', () => server.close());
     });
 
     server.listen(CALLBACK_PORT, () => {
       console.log(`\nCallback server listening on http://localhost:${CALLBACK_PORT}`);
-      resolveServer({ server, callbackPromise });
+      resolveServer(callbackPromise);
     });
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        throw new Error(`Port ${CALLBACK_PORT} is already in use. Please free the port and try again.`);
+        rejectServer(new Error(`Port ${CALLBACK_PORT} is already in use. Please free the port and try again.`));
+      } else {
+        rejectServer(err);
       }
-      throw err;
     });
   });
 }
@@ -349,6 +348,70 @@ function saveToEnv(tokens, clientId, tokenEndpoint) {
   console.log('\nDone! Use GRANOLA_ACCESS_TOKEN as your Bearer token in MCP config.');
 }
 
+// ─── Step 7: Configure MCP ───────────────────────────────────────────────────
+
+async function promptUser(question) {
+  const { createInterface } = await import('readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+function readJsonFile(filePath) {
+  if (!existsSync(filePath)) return {};
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
+}
+
+async function configureClaudeCode(accessToken) {
+  // Remove existing entry first (ignore errors if it doesn't exist)
+  await execAsync('claude mcp remove granola 2>/dev/null || true');
+  await execAsync(
+    `claude mcp add --transport http granola https://mcp.granola.ai/mcp --header "Authorization: Bearer ${accessToken}"`
+  );
+  console.log('  Claude Code configured: ~/.claude.json (restart Claude Code to apply)');
+}
+
+function configureCursor(home, accessToken) {
+  const configPath = `${home}/.cursor/mcp.json`;
+  const config = readJsonFile(configPath);
+  if (!config.mcpServers) config.mcpServers = {};
+  config.mcpServers.granola = {
+    url: 'https://mcp.granola.ai/mcp',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  };
+  writeJsonFile(configPath, config);
+  console.log(`  Cursor configured:      ${configPath}`);
+}
+
+async function setupMcp(accessToken) {
+  const home = process.env.HOME || process.env.USERPROFILE;
+
+  console.log('\n─── MCP Configuration ───────────────────────────────────────────────────────');
+  console.log('Configure Granola MCP for:');
+  console.log('  1) Claude Code  (~/.claude.json via CLI)');
+  console.log('  2) Cursor       (~/.cursor/mcp.json)');
+  console.log('  3) Both');
+  console.log('  4) Skip');
+
+  const answer = await promptUser('\nYour choice [1-4]: ');
+
+  if (answer === '1' || answer === '3') await configureClaudeCode(accessToken);
+  if (answer === '2' || answer === '3') configureCursor(home, accessToken);
+  if (answer === '4' || answer === '') console.log('  Skipping MCP configuration.');
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -362,7 +425,7 @@ async function main() {
     const clientId = await registerClient(endpoints.registration_endpoint);
 
     // Step 3: Start local server
-    const { callbackPromise } = await startCallbackServer();
+    const callbackPromise = await startCallbackServer();
 
     // Step 4: PKCE + open browser
     const codeVerifier = generateCodeVerifier();
@@ -374,8 +437,11 @@ async function main() {
 
     console.log('Waiting for authentication... (complete login in the browser)');
 
-    // Step 5: Wait for callback
-    const callback = await callbackPromise;
+    // Step 5: Wait for callback (5-minute timeout)
+    const authTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Authentication timed out after 5 minutes')), 5 * 60 * 1000)
+    );
+    const callback = await Promise.race([callbackPromise, authTimeout]);
 
     if (callback.error) {
       throw new Error(`OAuth error: ${callback.error}`);
@@ -389,6 +455,9 @@ async function main() {
 
     // Step 6: Save
     saveToEnv(tokens, clientId, endpoints.token_endpoint);
+
+    // Step 7: Configure MCP
+    await setupMcp(tokens.access_token);
 
   } catch (err) {
     console.error('\nError:', err.message);

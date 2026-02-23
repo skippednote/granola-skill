@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Claude Code skill for Granola OAuth authentication",
+  "bin": {
+    "granola-skill": "./bin/install.js"
+  },
   "scripts": {
     "auth": "node auth.js"
   },
