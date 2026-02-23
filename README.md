@@ -1,0 +1,125 @@
+# granola-skill
+
+A [Claude Code](https://claude.ai/code) skill that authenticates with [Granola](https://granola.ai) and saves OAuth tokens to a `.env` file — ready to use with Granola's MCP server.
+
+## What it is
+
+`granola-skill` implements the full OAuth 2.1 + PKCE + Dynamic Client Registration flow for Granola's MCP API. It runs entirely locally, requires no pre-registered app credentials, and stores the resulting tokens in a `.env` file in your project directory. Once authenticated, you can point Claude Desktop or Claude Code at Granola's MCP server using the saved access token.
+
+## Prerequisites
+
+- **Node.js 18+** (`node --version` to check)
+- **Claude Code** (the CLI)
+- A **Granola account** (sign in with Google)
+
+## Installation
+
+```bash
+git clone https://github.com/skippednote/granola-skill.git
+cd granola-skill
+bash install.sh
+```
+
+The install script will:
+1. Verify Node.js 18+ is available
+2. Write a `SKILL.md` to `~/.claude/skills/granola-auth/` with the correct absolute path to `auth.js`
+
+After installation, **restart Claude Code** to pick up the new skill.
+
+## Usage
+
+### Via Claude Code skill (recommended)
+
+Inside any Claude Code session, run:
+
+```
+/granola-auth
+```
+
+Claude will execute `node auth.js`, open your browser for login, and save the tokens to `.env` in the current working directory.
+
+### Standalone
+
+```bash
+node auth.js
+```
+
+Tokens are written to `.env` in whichever directory you run the command from.
+
+## What gets saved
+
+After a successful run, your `.env` will contain:
+
+| Variable | Description |
+|---|---|
+| `GRANOLA_ACCESS_TOKEN` | Bearer token for MCP API requests |
+| `GRANOLA_REFRESH_TOKEN` | Refresh token (may be empty if not issued) |
+| `GRANOLA_TOKEN_EXPIRES_AT` | Unix timestamp when the access token expires |
+| `GRANOLA_CLIENT_ID` | The dynamically registered OAuth client ID |
+| `GRANOLA_TOKEN_ENDPOINT` | Token endpoint URL (for refreshing) |
+
+## Using with MCP
+
+### Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "granola": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch", "https://mcp.granola.ai/mcp"],
+      "env": {
+        "AUTHORIZATION": "Bearer YOUR_GRANOLA_ACCESS_TOKEN"
+      }
+    }
+  }
+}
+```
+
+### Claude Code (`.claude/settings.json` or `--mcp-server` flag)
+
+```json
+{
+  "mcpServers": {
+    "granola": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch", "https://mcp.granola.ai/mcp"],
+      "env": {
+        "AUTHORIZATION": "Bearer YOUR_GRANOLA_ACCESS_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_GRANOLA_ACCESS_TOKEN` with the value of `GRANOLA_ACCESS_TOKEN` from `.env`.
+
+## Token refresh
+
+Access tokens expire in approximately **1 hour**. To get a fresh token, simply re-run the auth flow:
+
+```bash
+node auth.js
+# or, in Claude Code:
+/granola-auth
+```
+
+The script preserves any non-`GRANOLA_*` variables already in your `.env`.
+
+## How it works
+
+1. **Discovery** — POSTs to `https://mcp.granola.ai/mcp`, which returns a `401` with a `WWW-Authenticate` header pointing to a resource metadata URL. That metadata contains the authorization server URL.
+
+2. **Dynamic Client Registration (DCR)** — Registers a new OAuth client on the fly with the authorization server. No pre-registered app credentials needed.
+
+3. **PKCE flow** — Generates a cryptographic `code_verifier` + `code_challenge` (SHA-256), builds an authorization URL, and opens it in your browser.
+
+4. **Local callback server** — Spins up a temporary HTTP server on `localhost:3334` to capture the OAuth redirect with the authorization `code`.
+
+5. **Token exchange** — POSTs the code + verifier to the token endpoint to obtain `access_token` (and optionally `refresh_token`).
+
+6. **Saves to `.env`** — Writes all token variables to `.env` in the current working directory, preserving any existing non-Granola variables.
+
+## License
+
+MIT
