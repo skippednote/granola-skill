@@ -6,10 +6,10 @@ import { homedir } from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ── Check Node.js ≥ 18 ────────────────────────────────────────────────────────
+// ── Check Node.js ≥ 22 ────────────────────────────────────────────────────────
 const major = parseInt(process.versions.node.split('.')[0], 10);
-if (major < 18) {
-  console.error(`Error: Node.js 18+ required (found ${process.version}).`);
+if (major < 22) {
+  console.error(`Error: Node.js 22+ required (found ${process.version}).`);
   process.exit(1);
 }
 
@@ -70,7 +70,7 @@ report which MCP config files were updated.
 
 If Step 2 fails, show the full error output and suggest:
 - Checking that port 3334 is not in use (\`lsof -i :3334\`)
-- Ensuring Node.js 18+ is installed (\`node --version\`)
+- Ensuring Node.js 22+ is installed (\`node --version\`)
 - Verifying internet connectivity to mcp.granola.ai
 `);
 

@@ -45,5 +45,5 @@ report which MCP config files were updated.
 
 If Step 2 fails, show the full error output and suggest:
 - Checking that port 3334 is not in use (`lsof -i :3334`)
-- Ensuring Node.js 18+ is installed (`node --version`)
+- Ensuring Node.js 22+ is installed (`node --version`)
 - Verifying internet connectivity to mcp.granola.ai

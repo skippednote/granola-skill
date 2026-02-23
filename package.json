@@ -10,7 +10,7 @@
     "auth": "node auth.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "license": "MIT",
   "keywords": ["granola", "mcp", "oauth", "claude-code", "skill"],
