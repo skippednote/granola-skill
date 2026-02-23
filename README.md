@@ -8,20 +8,20 @@ A [Claude Code](https://claude.ai/code) skill that authenticates with [Granola](
 
 ## Prerequisites
 
-- **Node.js 18+** (`node --version` to check)
+- **Node.js 22+** (`node --version` to check)
 - **Claude Code** (the CLI)
 - A **Granola account** (sign in with Google)
 
 ## Installation
 
 ```bash
-npx github:skippednote/granola-skill
+npx skills add skippednote/granola-skill
 ```
 
 This will:
-1. Verify Node.js 18+ is available
-2. Copy `auth.js` to `~/.claude/skills/granola-auth/`
-3. Write a `SKILL.md` referencing that stable path
+1. Verify Node.js 22+ is available
+2. Copy `auth.js` and `refresh.js` to `~/.claude/skills/granola-auth/`
+3. Write a `SKILL.md` referencing those stable paths
 
 After installation, **restart Claude Code** to pick up the new skill.
 
@@ -42,11 +42,15 @@ Inside any Claude Code session, run:
 /granola-auth
 ```
 
-Claude will execute `node auth.js`, open your browser for login, and save the tokens to `.env` in the current working directory.
+Claude will first try to silently refresh your existing token using `refresh.js`. If that succeeds, no browser is opened. If the token is missing or expired beyond refresh, it falls back to the full browser OAuth flow via `auth.js`.
 
 ### Standalone
 
 ```bash
+# Try silent refresh first
+node refresh.js
+
+# Full OAuth flow (opens browser)
 node auth.js
 ```
 
@@ -100,10 +104,12 @@ Replace `YOUR_GRANOLA_ACCESS_TOKEN` with the value of `GRANOLA_ACCESS_TOKEN` fro
 
 ## Token refresh
 
-Access tokens expire in approximately **1 hour**. To get a fresh token, simply re-run the auth flow:
+Access tokens expire in approximately **1 hour**. The `/granola-auth` skill handles this automatically — it tries a silent refresh first and only opens the browser if the refresh token is also missing or invalid.
+
+To refresh manually:
 
 ```bash
-node auth.js
+node refresh.js
 # or, in Claude Code:
 /granola-auth
 ```
